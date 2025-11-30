@@ -48,6 +48,16 @@
             android:textSize="10sp"
             android:textColor="@color/gray" />
 
+        <Button
+            android:id="@+id/btnShowOnMap"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Посмотреть на карте"
+            android:backgroundTint="@color/colorAccent"
+            android:textColor="@color/white"
+            android:visibility="gone" />
+
     </LinearLayout>
 
 </androidx.cardview.widget.CardView>

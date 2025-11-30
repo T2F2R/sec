@@ -12,13 +12,14 @@ import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.sec.R
+import com.example.sec.activity.MapActivity
 import com.example.sec.adapter.ObjectsAdapter
 import com.example.sec.classes.GuardObject
 import com.example.sec.classes.ObjectsResponse
 import com.example.sec.utils.NetworkUtils
 import com.google.gson.Gson
 
-class ObjectsFragment : Fragment() {
+class ObjectsFragment : Fragment(), ObjectsAdapter.OnObjectClickListener {
 
     private lateinit var recyclerView: RecyclerView
     private lateinit var progressBar: ProgressBar
@@ -48,8 +49,28 @@ class ObjectsFragment : Fragment() {
 
     private fun setupRecyclerView() {
         adapter = ObjectsAdapter(objectsList)
+        adapter.setOnObjectClickListener(this) // Устанавливаем слушатель
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
         recyclerView.adapter = adapter
+    }
+
+    // Реализация методов из интерфейса OnObjectClickListener
+
+    // Клик по карточке объекта - открываем детали в MapActivity
+    override fun onObjectClick(guardObject: GuardObject) {
+        openMapWithObject(guardObject)
+    }
+
+    // Клик по кнопке "Показать на карте" - тоже открываем MapActivity
+    override fun onShowOnMapClick(guardObject: GuardObject) {
+        openMapWithObject(guardObject)
+    }
+
+    private fun openMapWithObject(guardObject: GuardObject) {
+        // Открываем нашу собственную MapActivity без внешних Intent
+        val intent = android.content.Intent(requireContext(), MapActivity::class.java)
+        intent.putExtra("GUARD_OBJECT", guardObject)
+        startActivity(intent)
     }
 
     private fun loadObjects() {
@@ -131,7 +152,6 @@ class ObjectsFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        // Обновляем данные при возвращении на фрагмент
         if (objectsList.isEmpty()) {
             loadObjects()
         }

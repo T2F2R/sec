@@ -20,41 +20,41 @@ import com.example.sec.classes.ScheduleResponse
 import com.example.sec.utils.NetworkUtils
 import com.google.gson.Gson
 
-class ScheduleFragment : Fragment() {
+class HistoryFragment : Fragment() {
 
     private lateinit var recyclerView: RecyclerView
     private lateinit var progressBar: ProgressBar
     private lateinit var tvEmpty: TextView
     private lateinit var adapter: ScheduleAdapter
     private val gson = Gson()
-    private var scheduleList = mutableListOf<ScheduleItem>()
+    private var historyList = mutableListOf<ScheduleItem>()
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        val view = inflater.inflate(R.layout.fragment_schedule, container, false)
+        val view = inflater.inflate(R.layout.fragment_history, container, false)
 
         initViews(view)
         setupRecyclerView()
-        loadSchedule()
+        loadHistory()
 
         return view
     }
 
     private fun initViews(view: View) {
-        recyclerView = view.findViewById(R.id.scheduleRecyclerView)
+        recyclerView = view.findViewById(R.id.historyRecyclerView)
         progressBar = view.findViewById(R.id.progressBar)
         tvEmpty = view.findViewById(R.id.tvEmpty)
     }
 
     private fun setupRecyclerView() {
-        adapter = ScheduleAdapter(scheduleList)
+        adapter = ScheduleAdapter(historyList)
         recyclerView.layoutManager = LinearLayoutManager(requireContext())
         recyclerView.adapter = adapter
     }
 
-    private fun loadSchedule() {
+    private fun loadHistory() {
         val sharedPref = requireContext()
             .getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
         val employeeId = sharedPref.getInt("employee_id", -1)
@@ -69,7 +69,7 @@ class ScheduleFragment : Fragment() {
             return
         }
 
-        LoadScheduleTask().execute(employeeId.toString())
+        LoadHistoryTask().execute(employeeId.toString())
     }
 
     private fun showLoading(show: Boolean) {
@@ -86,7 +86,7 @@ class ScheduleFragment : Fragment() {
         Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
     }
 
-    private inner class LoadScheduleTask : AsyncTask<String, Void, ScheduleResponse>() {
+    private inner class LoadHistoryTask : AsyncTask<String, Void, ScheduleResponse>() {
 
         override fun onPreExecute() {
             showLoading(true)
@@ -96,10 +96,10 @@ class ScheduleFragment : Fragment() {
             val employeeId = params[0]
 
             val response = NetworkUtils.makeGetRequest(
-                "/employee/schedule?employee_id=$employeeId"
+                "/employee/history?employee_id=$employeeId"
             )
 
-            Log.d("SCHEDULE_DEBUG", "Response from server: $response")
+            Log.d("HISTORY_DEBUG", "Response from server: $response")
 
             return if (response != null) {
                 try {
@@ -116,31 +116,34 @@ class ScheduleFragment : Fragment() {
         override fun onPostExecute(result: ScheduleResponse) {
             showLoading(false)
 
-            Log.d("SCHEDULE_DEBUG", "Result success: ${result.success}")
-            Log.d("SCHEDULE_DEBUG", "Result schedule: ${result.schedule}")
-            Log.d("SCHEDULE_DEBUG", "Result error: ${result.error}")
+            Log.d("HISTORY_DEBUG", "Result success: ${result.success}")
+            Log.d("HISTORY_DEBUG", "Result history: ${result.history}")
+            Log.d("HISTORY_DEBUG", "Result schedule: ${result.schedule}")
+            Log.d("HISTORY_DEBUG", "Result error: ${result.error}")
 
             if (result.success) {
-                scheduleList.clear()
+                historyList.clear()
 
-                // ИСПРАВЛЕНИЕ: Проверяем на null и используем безопасный вызов
-                if (result.schedule != null) {
-                    scheduleList.addAll(result.schedule) // Теперь result.schedule не-null
+                // Пробуем оба варианта: history и schedule
+                val dataToAdd = result.history ?: result.schedule
+
+                if (dataToAdd != null) {
+                    historyList.addAll(dataToAdd)
                     adapter.notifyDataSetChanged()
 
-                    if (scheduleList.isEmpty()) {
-                        showError("Расписание пусто")
+                    if (historyList.isEmpty()) {
+                        showError("История смен пуста")
                     } else {
                         tvEmpty.visibility = View.GONE
                         recyclerView.visibility = View.VISIBLE
-                        Log.d("SCHEDULE_DEBUG", "Loaded ${scheduleList.size} items")
+                        Log.d("HISTORY_DEBUG", "Loaded ${historyList.size} items")
                     }
                 } else {
-                    showError("Данные расписания не получены")
-                    Log.e("SCHEDULE_DEBUG", "Schedule data is null")
+                    showError("Данные не получены (null)")
+                    Log.e("HISTORY_DEBUG", "Both history and schedule are null")
                 }
             } else {
-                showError(result.error ?: "Ошибка загрузки расписания")
+                showError(result.error ?: "Ошибка загрузки истории")
             }
         }
     }

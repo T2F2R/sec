@@ -3,9 +3,14 @@ package com.example.sec.activity
 import android.content.Intent
 import android.os.AsyncTask
 import android.os.Bundle
+import android.util.Log
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import com.example.sec.R
+import com.example.sec.classes.RegisterResponse
+import com.example.sec.utils.NetworkUtils
+import com.google.gson.Gson
+import org.json.JSONObject
 
 class RegisterActivity : AppCompatActivity() {
 
@@ -19,6 +24,7 @@ class RegisterActivity : AppCompatActivity() {
     private lateinit var etConfirmPassword: EditText
     private lateinit var btnRegister: Button
     private lateinit var progressBar: ProgressBar
+    private val gson = Gson()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,6 +59,11 @@ class RegisterActivity : AppCompatActivity() {
             val confirmPassword = etConfirmPassword.text.toString().trim()
 
             if (!validateInput(lastName, firstName, passportSeries, passportNumber, login, password, confirmPassword)) {
+                return@setOnClickListener
+            }
+
+            if (!NetworkUtils.isNetworkAvailable(this)) {
+                Toast.makeText(this, "Нет подключения к интернету", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
@@ -98,24 +109,96 @@ class RegisterActivity : AppCompatActivity() {
         return true
     }
 
+    private inner class RegisterTask : AsyncTask<String, Void, RegisterResponse>() {
 
+        override fun onPreExecute() {
+            progressBar.visibility = ProgressBar.VISIBLE
+            btnRegister.isEnabled = false
+            Log.d("REGISTER_DEBUG", "=== НАЧАЛО РЕГИСТРАЦИИ ===")
+        }
+
+        override fun doInBackground(vararg params: String): RegisterResponse {
             val lastName = params[0]
             val firstName = params[1]
             val patronymic = params[2]
+            val passportSeries = params[3].toIntOrNull()
+            val passportNumber = params[4].toIntOrNull()
             val login = params[5]
             val password = params[6]
 
+            Log.d("REGISTER_DEBUG", "Данные: $lastName $firstName, паспорт: $passportSeries $passportNumber, логин: $login")
+
+            if (passportSeries == null || passportNumber == null) {
+                return RegisterResponse(success = false, error = "Неверный формат паспортных данных")
             }
 
+            // Используем JSONObject для точного контроля данных
+            val registerRequest = JSONObject().apply {
+                put("last_name", lastName)
+                put("first_name", firstName)
+                put("patronymic", if (patronymic.isEmpty()) "" else patronymic)
+                put("passport_series", passportSeries)
+                put("passport_number", passportNumber)
+                put("login", login)
+                put("password", password)
             }
 
+            val jsonBody = registerRequest.toString()
+            Log.d("REGISTER_DEBUG", "Отправляемый JSON: $jsonBody")
 
+            val response = NetworkUtils.makePostRequest("/register", jsonBody)
 
+            Log.d("REGISTER_DEBUG", "Ответ сервера: $response")
 
+            return if (response != null) {
+                try {
+                    val result = gson.fromJson(response, RegisterResponse::class.java)
+                    Log.d("REGISTER_DEBUG", "Парсинг ответа: success=${result.success}, error=${result.error}")
+                    result
                 } catch (e: Exception) {
+                    Log.e("REGISTER_DEBUG", "Ошибка парсинга: ${e.message}")
+                    RegisterResponse(success = false, error = "Ошибка обработки ответа")
                 }
             } else {
+                Log.e("REGISTER_DEBUG", "Нет ответа от сервера")
+                RegisterResponse(success = false, error = "Ошибка подключения к серверу")
             }
+        }
+
+        override fun onPostExecute(result: RegisterResponse) {
+            progressBar.visibility = ProgressBar.GONE
+            btnRegister.isEnabled = true
+
+            Log.d("REGISTER_DEBUG", "Результат: success=${result.success}, error=${result.error}")
+
+            if (result.success && result.employeeId != null && result.employeeName != null) {
+                Log.d("REGISTER_DEBUG", "✅ Успешная регистрация! ID: ${result.employeeId}, Name: ${result.employeeName}")
+
+                Toast.makeText(this@RegisterActivity, "Регистрация успешна!", Toast.LENGTH_SHORT).show()
+
+                // Сохраняем данные
+                val sharedPref = getSharedPreferences("user_prefs", MODE_PRIVATE)
+                with(sharedPref.edit()) {
+                    putInt("employee_id", result.employeeId)
+                    putString("employee_name", result.employeeName)
+                    putBoolean("is_logged_in", true)
+                    apply()
+                }
+
+                // Переходим на главный экран
+                val intent = Intent(this@RegisterActivity, MainActivity::class.java)
+                startActivity(intent)
+                finish()
+            } else {
+                Toast.makeText(
+                    this@RegisterActivity,
+                    result.error ?: "Ошибка регистрации",
+                    Toast.LENGTH_LONG
+                ).show()
+                Log.e("REGISTER_DEBUG", "❌ Ошибка регистрации: ${result.error}")
+            }
+
+            Log.d("REGISTER_DEBUG", "=== ЗАВЕРШЕНИЕ РЕГИСТРАЦИИ ===")
         }
     }
 }
